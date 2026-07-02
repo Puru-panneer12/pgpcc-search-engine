@@ -11,9 +11,9 @@ Resources:
       Description: ''
       MemorySize: 512
       Timeout: 900
-      Role: 'arn:aws:iam::844028273225:role/lambda_s3'
+      Role: 'arn:aws:iam::154986110441:role/pgpcc-lambda-role'
       Environment:
         Variables:
-          TARGET_BUCKET: gl-inter-store
+          TARGET_BUCKET: pgpcc-purush-intermediate-store
       Layers:
         - 'arn:aws:lambda:ap-northeast-1:844028273225:layer:tika:1'
