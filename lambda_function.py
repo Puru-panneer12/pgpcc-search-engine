@@ -39,9 +39,14 @@ def lambda_handler(event, context):
         "statusCode": 200, "statusDescription": "200 OK", "isBase64Encoded": False,
         "headers": { "Content-Type": "application/json" }
         }
+        
         encBodyData = event['body']
-        bodyData = base64.b64decode(encBodyData)
-        encFormData = bodyData.decode('utf-8')
+        if event.get('isBase64Encoded'):
+          bodyData = base64.b64decode(encBodyData)
+          encFormData = bodyData.decode('utf-8')
+        else:
+          encFormData = encBodyData
+        
         formDict = urllib.parse.parse_qs(encFormData)
         term = formDict.get('searchTerm')
         print("Term:", term)
