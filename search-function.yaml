@@ -5,7 +5,7 @@ Resources:
   searchfunction:
     Type: 'AWS::Serverless::Function'
     Properties:
-      Handler: sample.lambda_handler
+      Handler: lambda_function.lambda_handler
       Runtime: python3.10
       CodeUri: .
       Description: ''
