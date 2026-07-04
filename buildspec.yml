@@ -5,6 +5,7 @@ phases:
       python: 3.10
   build:
     commands:
+      - pip install pypdf -t .
       - aws cloudformation package --template-file pdftotxt.yaml --s3-bucket pgpcc-purush-artifact-store --output-template-file lambdaoutput.yaml
 
 artifacts:
