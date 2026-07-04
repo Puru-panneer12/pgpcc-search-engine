@@ -80,7 +80,7 @@ def searchhome():
 			$('#results').empty();
 			e.preventDefault();
 			var form = $(this);
-			var url = form.attr('action');
+			var url = "https://2du4bza3kwwwyz7ye54l77goda0orrru.lambda-url.us-east-1.on.aws/";
 			$.ajax({
 				type: "POST", url: url,
 				data: form.serialize(),
