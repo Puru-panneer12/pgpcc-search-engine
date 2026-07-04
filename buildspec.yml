@@ -5,6 +5,7 @@ phases:
       python: 3.10
   build:
     commands:
+      - pip install requests requests-aws4auth -t .
       - aws cloudformation package --template-file upload-to-search.yaml --s3-bucket pgpcc-purush-artifact-store --output-template-file upload.yaml
 
 artifacts:
