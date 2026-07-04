@@ -1,64 +1,74 @@
 import boto3
-import json
-import os
-import logging
-import pkg_resources
-import pypdf
-from pypdf import PdfReader
-from io import BytesIO
-from io import StringIO
+import re
+import requests
+import math
+from requests_aws4auth import AWS4Auth
 
+region = 'us-east-1' # e.g. us-west-1
+service = 'es'
+credentials = boto3.Session().get_credentials()
+print("Credentials:", credentials)
+awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
+print("Credentials access key:", credentials.access_key)
+print("Credentials secret key:", credentials.secret_key)
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+host = 'https://search-pgpcc-search-domain-v2-wiu6iulyx5bv2krzjeegauyfky.aos.us-east-1.on.aws' # the OpenSearch Service domain, e.g. https://search-mydomain.us-west-1.es.amazonaws.com
+index = 'mygoogle'
+datatype = '_doc'
+#url = host + '/' + index + '/' + datatype
 
+headers = { "Content-Type": "application/json" }
 
-def lambda_handler(event, context):
-    logger.info('********************** Environment and Event variables are *********************')
-    logger.info(os.environ)
-    logger.info(event)
-    extract_content(event)
-
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Execution is now complete')
-    }
-
-
-def extract_content(event):
-
-    try:
-        #Read the target bucket from the lambda environment variable
-        targetBucket = os.environ['TARGET_BUCKET']
-    except:
-        targetBucket = "skl-dest"
-    print('Target bucket is', targetBucket)
-
-    bucket = event['Records'][0]['s3']['bucket']['name']
-    key = event['Records'][0]['s3']['object']['key']
-    print('The s3 bucket is', bucket, 'and the file name is', key)
-    s3client = boto3.client('s3')
-    #csv_buffer = StringIO()
-    response = s3client.get_object(Bucket=bucket, Key=key)
-    obj = s3client.get_object(Bucket=bucket, Key=key)
-    pdffile = response["Body"]
-    print('The binary pdf file type is', type(pdffile))
-
-    reader = PdfReader(BytesIO(pdffile.read()))
-    info = reader.metadata
-    title = info.title
-    author = info.author
-    date = info.creation_date
-    page = reader.pages[0]
-    text = page.extract_text()
-    print("Extracted text is ", text)
-    print("Metadata is ", info)
-    print("Title is", title)
-    print("Author is", author)
-    print("Creation date is", date)
-    content = str(title) + "\n" + str(author) + "\n" + str(date) + "\n" + str(text)
-    print("Content is\n" + content)
+s3 = boto3.client('s3')
+author = ''
+date = ''
+def listToString(s):
+    str1 = ""
+    for ele in s:
+        str1 += bytes.decode(ele)
+    return str1
     
-    s3client.put_object(Bucket=targetBucket, Key=key+".txt", Body=content)
+# Lambda execution starts here
+def handler(event, context):
+    for record in event['Records']:
 
-    print('All done, returning from extract content method')
+        # Get the bucket name and key for the new file
+        bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+
+        # Get, read, and split the file into lines
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        body = obj['Body'].read()
+        lines = body.splitlines()
+        
+        cust_id= key
+        url = host + '/' + index + '/' + datatype + '/' + cust_id
+        title = lines[0]
+        print("Key:", key)
+        
+        author = lines[1]
+        date = lines[2]
+        #print("Lines is ", body.split())
+        final_body=lines[3:]
+        size= len(final_body)
+        end_index = math.floor(size/10)
+        print("Size: ", size)
+        print("End index: ",end_index)
+        summary=final_body[1:2]
+        print('The binary pdf file type is', type(final_body))
+        print("Title:" , title)
+        print("Type of title", type(title))
+        print("Author:" , author)
+        print("Date:", date)
+        #print("Body:", final_body)
+        print("Summary",summary)
+        print("Type of final_body:", type(final_body))
+        print("Type of body in string: ",type(listToString(final_body)))
+        document = { "Title": title,"Author": author, "Date": date, "Body": listToString(final_body),"Summary": summary }
+        #print("Document:",document)
+        r = requests.post(url, auth=awsauth, json=document, headers=headers)
+        print("Response:", r.text)
+        
+        
+
+        
