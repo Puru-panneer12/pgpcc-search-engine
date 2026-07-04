@@ -110,7 +110,7 @@ def searchhome():
 	</script>
 </body>
 </html>
-"""
+
 def lambda_handler(event, context):
     return {
         "statusCode": 200,
