@@ -1,87 +1,79 @@
 import boto3
 import requests
 from requests_aws4auth import AWS4Auth
-import base64
-import urllib.parse
-import json
 
-region = 'us-east-1'
-service = 'es'
+region = "us-east-1"
+service = "es"
+
 credentials = boto3.Session().get_credentials()
-awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
-host = 'https://search-pgpcc-search-domain-v2-wiu6iulyx5bv2krzjeegauyfky.aos.us-east-1.on.aws'
-index = 'mygoogle'
-url = host + '/' + index + '/_search'
-def get_from_Search(query):
-    
-    headers = { "Content-Type": "application/json" }
+awsauth = AWS4Auth(
+    credentials.access_key,
+    credentials.secret_key,
+    region,
+    service,
+    session_token=credentials.token
+)
 
-    r = requests.get(url, auth=awsauth, headers=headers, data=json.dumps(query))
+host = "https://search-pgpcc-search-domain-v2-wiu6iulyx5bv2krzjeegauyfky.aos.us-east-1.on.aws"
+index = "mygoogle"
+datatype = "_doc"
 
-    response = {
+headers = {"Content-Type": "application/json"}
+s3 = boto3.client("s3")
+
+
+def bytes_to_string(value):
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore")
+    return str(value)
+
+
+def list_to_string(lines):
+    return " ".join(bytes_to_string(line).strip() for line in lines if line)
+
+
+def generate_summary(text, max_chars=300):
+    if not text:
+        return ""
+    clean_text = " ".join(text.split())
+    return clean_text[:max_chars] + "..." if len(clean_text) > max_chars else clean_text
+
+
+def handler(event, context):
+    for record in event["Records"]:
+        bucket = record["s3"]["bucket"]["name"]
+        key = record["s3"]["object"]["key"]
+
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        body = obj["Body"].read()
+        lines = body.splitlines()
+
+        title = bytes_to_string(lines[0]) if len(lines) > 0 else key
+        author = bytes_to_string(lines[1]) if len(lines) > 1 else "None"
+        date = bytes_to_string(lines[2]) if len(lines) > 2 else "None"
+
+        full_text = list_to_string(lines[3:]) if len(lines) > 3 else ""
+        summary = generate_summary(full_text)
+
+        document = {
+            "Title": title,
+            "Author": author,
+            "Date": date,
+            "Body": full_text,
+            "Summary": summary
+        }
+
+        url = f"{host}/{index}/{datatype}/{key}"
+
+        print("Indexing key:", key)
+        print("Title:", title)
+        print("Summary:", summary)
+
+        response = requests.post(url, auth=awsauth, json=document, headers=headers)
+
+        print("OpenSearch response:", response.text)
+
+    return {
         "statusCode": 200,
-        "headers": {
-            "Access-Control-Allow-Origin": '*'
-        },
-        "isBase64Encoded": False
+        "body": "Upload to OpenSearch completed"
     }
-
-    response['body'] = r.text
-    body=r.text
-    response_json=json.dumps(body);
-    return body
-
-
-def lambda_handler(event, context):
-    try:
-        print("Event is",event)
-        response = {
-        "statusCode": 200, "statusDescription": "200 OK", "isBase64Encoded": False,
-        "headers": { "Content-Type": "application/json" }
-        }
-        
-        encBodyData = event['body']
-        if event.get('isBase64Encoded'):
-          bodyData = base64.b64decode(encBodyData)
-          encFormData = bodyData.decode('utf-8')
-        else:
-          encFormData = encBodyData
-        
-        formDict = urllib.parse.parse_qs(encFormData)
-        term = formDict.get('searchTerm')
-        print("Term:", term)
-        print("Type of term", type(term))
-        print("Term[0]:", term[0])
-        query = {
-        "size": 25,
-        "query": {
-            "multi_match": {
-                "query": term[0],
-                "fields": ["Title","Author", "Date", "Body"]
-            }
-            },
-            "fields": ["Title","Author","Date","Summary"]
-        }
-        print("Sending query to Opensearch")
-        response = get_from_Search(query)
-        response_json = json.loads(response)
-        print("Response JSON is ", json.dumps(response_json))
-        author = response_json["hits"]["hits"][0]["_source"]["Author"]
-        date = response_json["hits"]["hits"][0]["_source"]["Date"]
-        body = response_json["hits"]["hits"][0]["_source"]["Body"]
-        print("Author is ", author)
-        print("Date is ",date)
-        print("Body is", body)
-        final_response = response_json["hits"]["hits"]
-        print("Final response is ", json.dumps(final_response))
-        return final_response
-            
-    
-    except Exception as e:
-        print("Exception is", str(e))
-        respData = {}
-        respData['status'] = False;
-        respData['message'] = str(e);
-        response['statusCode'] = 500;
-        response['body'] = json.dumps(respData);
-        return response
